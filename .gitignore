@@ -1,0 +1,6 @@
+# Built PSP Files
+*.o
+*.pbp
+*.elf
+*.prx
+.vs\
