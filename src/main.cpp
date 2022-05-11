@@ -23,7 +23,7 @@
 
 
 //APPEL FOR PSP BY NOODLES 2022
-PSP_MODULE_INFO("appel", 0, 1, 0);
+PSP_MODULE_INFO("Appel", 0, 1, 0);
 PSP_HEAP_SIZE_KB(-256);
 
 int state = 0;
@@ -65,6 +65,15 @@ int tileMasterY;
 int tileMasterR1;
 int tileMasterIndex = 0;
 
+int gridOff = 0;
+int gridOff2 = 0;
+int particleAmount = 0;
+
+bool isGrounded = false;
+bool playerDie = false;
+
+int jumpTick = 25;
+
 // collision (useful!)
 bool collision(int x1,int y1,int x2,int y2,int w1,int h1,int w2, int h2,bool debug,int sx){
 	if (debug==true) {
@@ -99,6 +108,8 @@ struct Tile {
 public:
 	int tX = 10;
 	int tY = 10;
+	int otX = 10;
+	int otY = 10;
 	int scX = 32;
 	int scY = 32;
 	int sX = 0;
@@ -109,6 +120,25 @@ public:
 	int tTick = 0;
 	int enemy_dir = 1;
 	int defeated = 0;
+	int dX;
+	int dY;
+};
+
+// particles
+struct Particle {
+public:
+	int pX = 10;
+	int pY = 10;
+	double pXvel = 0;
+	double pYvel = 0;
+	int scX2 = 32;
+	int scY2 = 32;
+	int sX2 = 0;
+	int sY2 = 0;
+	int pLife = 100;
+	int pType = 0;
+	int vis = 0;
+	int pTick = 0;
 };
 
 int getTileX(int in){
@@ -144,6 +174,19 @@ int getTileX(int in){
 	}
 	if(in == 12){
 		return(tilePos(2));
+	}
+	
+	if(in == 13){
+		return(tilePos(0));
+	}
+	if(in == 14){
+		return(tilePos(1));
+	}
+	if(in == 15){
+		return(tilePos(0));
+	}
+	if(in == 16){
+		return(tilePos(1));
 	}
 }
 
@@ -181,6 +224,19 @@ int getTileY(int in){
 	if(in == 12){
 		return(tilePos(2));
 	}
+	
+	if(in == 13){
+		return(tilePos(3));
+	}
+	if(in == 14){
+		return(tilePos(3));
+	}
+	if(in == 15){
+		return(tilePos(4));
+	}
+	if(in == 16){
+		return(tilePos(4));
+	}
 }
 
 int getType(int in){
@@ -191,7 +247,7 @@ int getType(int in){
 		return(0);
 	}
 	if(in == 4){
-		return(0);
+		return(3);
 	}
 	if(in == 5){
 		return(1);
@@ -215,22 +271,34 @@ int getType(int in){
 		return(0);
 	}
 	if(in == 12){
+		return(3);
+	}
+	if(in == 13){
+		return(0);
+	}
+	if(in == 14){
+		return(0);
+	}
+	if(in == 15){
+		return(0);
+	}
+	if(in == 16){
 		return(0);
 	}
 }
+
+Tile lvl[600];
+Particle parts[128];
+
+pgeWav* channelSn;
+pgeWav* channelSn2;
+pgeWav* channelSn3;
 
 auto main() -> int {
 	
 	//Get from map data
 	int lvlData[4000];
 	std::copy(mapData,mapData+4000,lvlData);
-	for (int i = 0; i < cloneCountX * cloneCountY; i++) {
-		if(lvlData[i] < 2){
-			lvlData[i]=2;
-		}
-	}
-	
-	Tile lvl[600];
 	//level stuff
 	tileMasterX = cloneCountX * -16;
 	tileMasterR1 = 0;
@@ -240,6 +308,8 @@ auto main() -> int {
 		for (int i2 = 0; i2 < cloneCountY; i2++) {
 			lvl[i2+tileMasterR1].tX = tileMasterX;
 			lvl[i2+tileMasterR1].tY = tileMasterY;
+			lvl[i2+tileMasterR1].otX = tileMasterX;
+			lvl[i2+tileMasterR1].otY = tileMasterY;
 			lvl[i2+tileMasterR1].index = tileMasterIndex;
 			lvl[i2+tileMasterR1].sX = getTileX(lvl[i2+tileMasterR1].index);
 			lvl[i2+tileMasterR1].sY = getTileY(lvl[i2+tileMasterR1].index);
@@ -254,95 +324,89 @@ auto main() -> int {
 
 	SceCtrlLatch latchData;
 	
+	scePowerSetClockFrequency(333, 333, 166);
+	
 	g2dTexture* appel = g2dTexLoad("assets/appel.png",G2D_SWIZZLE);
+	g2dTexture* particleData = g2dTexLoad("assets/particles.png",G2D_SWIZZLE);
 	g2dTexture* levelRes = g2dTexLoad("assets/level.png",G2D_SWIZZLE);
 	g2dTexture* bg = g2dTexLoad("assets/bg.png",G2D_SWIZZLE);
+	g2dTexture* bg2 = g2dTexLoad("assets/grid.png",G2D_SWIZZLE);
 	
 	pgeWav* appleSn = pgeWavLoad("assets/audio/crunch.wav");
 	pgeWav* apple2Sn = pgeWavLoad("assets/audio/coin.wav");
-	pgeWav* enemySn = pgeWavLoad("assets/audio/blip2.wav");
 	//pgeWav* musicSn = pgeWavLoad("assets/audio/music.wav");
-	
-	pgeWav* channelSn;
-	pgeWav* channelSn2;
-	pgeWav* channelSn3 = pgeWavLoad("assets/audio/music.wav");
-	
-	SceCtrlData ctrlData;
 	
 	// AUDIO INIT
 	pgeWavInit();
+
+	channelSn3 = pgeWavLoad("assets/audio/music.wav");
+	
+	
+	SceCtrlData ctrlData;
 	
 	pgeWavLoop(channelSn3,1); // loops music
 	pgeWavPlay(channelSn3);
 	
+	for (int i = 0; i < cloneCountX * cloneCountY; i++) {
+		lvl[i].otX = lvl[i].tX;
+		lvl[i].otY = lvl[i].tY;
+	}
+	
 	while(running==1){
 		g2dClear(WHITE);
-		g2dBeginRects(bg);
-		g2dSetColor(WHITE);
-		g2dSetScaleWH(480,272);
-		g2dSetCoordXY(0,0);
-		g2dAdd();
-		g2dEnd();
-		
+		// bg
+		gridOff=-1024;
+		gridOff2=1;
+		for (int i = 0; i < 4; i++) {
+			g2dBeginRects(bg);
+			g2dSetColor(WHITE);
+			g2dSetScaleWH(512,512);
+			g2dSetCoordXY(0 - (round((camX / 4) / 512) * 512 - (camX / 4) + (i * 512)),0 - (round((camY / 4) / 512) * 512 - (camY / 4)));
+			g2dAdd();
+			g2dEnd();
+			gridOff+=512;
+		}
+		for (int i = 0; i < 4; i++) {
+			g2dBeginRects(bg);
+			g2dSetColor(WHITE);
+			g2dSetScaleWH(512,512);
+			g2dSetCoordXY(0 - (round((camX / 4) / 512) * 512 - (camX / 4) + (i * 512)),0 - (round((camY / 4) / 512) * 512 - (camY / 4) + 512));
+			g2dAdd();
+			g2dEnd();
+			gridOff+=512;
+		}
+		gridOff=-1024;
+		gridOff2=1;
+		for (int i = 0; i < 4; i++) {
+			g2dBeginRects(bg2);
+			g2dSetColor(WHITE);
+			g2dSetScaleWH(512,512);
+			g2dSetCoordXY(0 - (round((camX / 2) / 512) * 512 - (camX / 2) + (i * 512)),(camY / 2));
+			g2dAdd();
+			g2dEnd();
+			gridOff+=512;
+		}
+		// LEVEL OUTLINE
 		for (int i = 0; i < cloneCountX * cloneCountY; i++) {
 			if (lvl[i].en == 1){
 				lvl[i].sX = getTileX(lvlData[lvl[i].index]);
 				lvl[i].sY = getTileY(lvlData[lvl[i].index]);
 				lvl[i].type = getType(lvlData[lvl[i].index]);
-				
-				if (abs(lvl[i].tX - camX) > (cloneCountX * 16)) {
-					if(lvl[i].tX < camX){
-						lvl[i].tX += cloneCountX * 32;
-						lvl[i].index += cloneCountX * levelCountY;
-					}else{
-						lvl[i].tX += cloneCountX * -32;
-						lvl[i].index += 0 - (cloneCountX * levelCountY);
-					}
-				}
-				if (abs(lvl[i].tY - camY) > (cloneCountY * 16)) {
-					if(lvl[i].tY < camY){
-						lvl[i].tY += cloneCountY * 32;
-						lvl[i].index += cloneCountY;
-					}else{
-						lvl[i].tY += cloneCountY * -32;
-						lvl[i].index += 0 -cloneCountY;
-					}
-				}
-				//outline
-				
+					
 				// texture
 				g2dBeginRects(levelRes); 
 				g2dSetCoordMode(G2D_CENTER);
-				g2dSetScaleWH(lvl[i].scX,lvl[i].scY);
+				g2dSetColor(BLACK);
+				g2dSetScaleWH(lvl[i].scX + 4,lvl[i].scY + 4);
 				//sin(round(tick / 1)) * 5
 				if (lvl[i].type == 0){
 					g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121); 
 				}
-				if (lvl[i].type == 1){
-					g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121+sin((tick / 15)) * 5); 
-				}
-				if (lvl[i].type == 2){
-					g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121); 
-				}
-				if (lvl[i].type != 1 && lvl[i].type != 0 && lvl[i].type !=2){
-					//g2dSetCoordXY(-64,-64); 
+				if (lvl[i].type != 0){
+					g2dSetCoordXY(-64,-64); 
 				}
 				g2dSetCropXY(lvl[i].sX,lvl[i].sY); 
-				if (lvl[i].type == 2){
-					g2dSetCropXY(226 + round(lvl[i].tTick/38) * 38,0); 
-					lvl[i].tTick += 6;
-					if(lvl[i].tTick > 105){
-						lvl[i].tTick = 0;
-						pgeWavPlay(enemySn);
-						lvl[i].enemy_dir = lvl[i].enemy_dir * -1;
-					}
-					lvl[i].tX += 2 * lvl[i].enemy_dir;
-				}
 				g2dSetCropWH(lvl[i].scX,lvl[i].scY);
-				if (lvl[i].type == 2){
-					g2dSetScaleWH(23 * lvl[i].enemy_dir * -1,33);
-					g2dSetCropWH(35,44);
-				}
 				g2dAdd();
 				g2dEnd(); 
 				//if (lvl[i].type == 2){
@@ -357,6 +421,120 @@ auto main() -> int {
 				//}
 			}
 		}
+		// LEVEL TEXTURE
+		for (int i = 0; i < cloneCountX * cloneCountY; i++) {
+				lvl[i].sX = getTileX(lvlData[lvl[i].index]);
+				lvl[i].sY = getTileY(lvlData[lvl[i].index]);
+				lvl[i].type = getType(lvlData[lvl[i].index]);
+				
+				if (lvl[i].type == 0 || lvl[i].type == 3){
+					lvl[i].en = 1;
+					lvl[i].defeated = 0;
+				}
+				
+				if (abs(lvl[i].tX - camX) > (cloneCountX * 16)) {
+					if(lvl[i].tX < camX){
+						lvl[i].tX += cloneCountX * 32;
+						lvl[i].index += cloneCountX * levelCountY;
+					}else{
+						lvl[i].tX += cloneCountX * -32;
+						lvl[i].index += ((0 - cloneCountX) * levelCountY);
+					}
+				}
+				if (abs(lvl[i].tY - camY) > (cloneCountY * 16)) {
+					if(lvl[i].tY < camY){
+						lvl[i].tY += cloneCountY * 32;
+						lvl[i].index += cloneCountY;
+					}else{
+						lvl[i].tY += cloneCountY * -32;
+						lvl[i].index += 0 -cloneCountY;
+					}
+				}
+					
+				// texture
+				if (lvl[i].en == 1){
+					g2dBeginRects(levelRes); 
+					g2dSetCoordMode(G2D_CENTER);
+					g2dSetColor(WHITE);
+					g2dSetScaleWH(lvl[i].scX,lvl[i].scY);
+					//sin(round(tick / 1)) * 5
+					if (lvl[i].type == 0 || lvl[i].type == 3){
+						lvl[i].en = 1;
+						g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121); 
+					}
+					if (lvl[i].type == 1){
+						g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121+sin((tick / 15)) * 5); 
+					}
+					if (lvl[i].type == 2){
+						g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121); 
+					}
+					if (lvl[i].type != 1 && lvl[i].type != 0 && lvl[i].type !=2 && lvl[i].type !=3){
+						g2dSetCoordXY(-64,-64); 
+					}
+					g2dSetCropXY(lvl[i].sX,lvl[i].sY); 
+					g2dSetCropWH(lvl[i].scX,lvl[i].scY);
+					if (lvl[i].type == 2){
+						g2dSetScaleWH(23 * lvl[i].enemy_dir * -1,33);
+						g2dSetCropWH(35,44);
+					}
+					if (lvl[i].type == 2){
+						g2dSetCropXY(226 + round(lvl[i].tTick/38) * 38,0); 
+						if (lvl[i].defeated == 0) {
+							lvl[i].tTick += 6;
+							if(lvl[i].tTick > 105){
+								lvl[i].tTick = 0;
+								channelSn2 = pgeWavLoad("assets/audio/blip2.wav");
+								pgeWavPlay(channelSn2);
+								lvl[i].enemy_dir = lvl[i].enemy_dir * -1;
+							}
+							lvl[i].tX += 2 * lvl[i].enemy_dir;
+						}else{
+							g2dSetCropXY(342,0); 
+							g2dSetCropWH(44,44);
+							lvl[i].tTick += 1;
+							if (lvl[i].tTick > 25){
+								channelSn2 = pgeWavLoad("assets/audio/squish.wav");
+								pgeWavPlay(channelSn2);
+								
+								if (particleAmount <= 127){
+									for (int i2 = 0; i2 < 6; i2++) {
+										parts[particleAmount].pType = 2;
+										parts[particleAmount].pLife = 32;
+										parts[particleAmount].pYvel = 5;
+										parts[particleAmount].pXvel = -2+ (rand() % 4 );
+										parts[particleAmount].pX = lvl[i].dX;
+										parts[particleAmount].pY = lvl[i].dY;
+										parts[particleAmount].vis = 1;
+										particleAmount++;
+									}
+								}
+								
+								if (lvl[i].type == 2){
+									//lvl[i].tY = lvl[i].otY;
+									//lvl[i].tX = lvl[i].otX;
+									lvlData[lvl[i].index] = 2;
+									lvl[i].en = 0;
+								}
+							}
+						}
+					}
+					g2dAdd();
+					g2dEnd(); 
+				}
+				
+				if (lvlData[lvl[i].index] == 13){
+					g2dBeginRects(levelRes); 
+					g2dSetCoordMode(G2D_CENTER);
+					g2dSetScaleWH(32,32); 
+					g2dSetCoordXY((camX-lvl[i].tX + 24 - (x / 16))+219 + 118,(camY-lvl[i].tY + 24 - (y / 16))+121 - 12); 
+					g2dSetCropWH(32,32); 
+					g2dSetCropXY(64,96); 
+					g2dAdd(); 
+					g2dEnd();
+				}
+			///
+		}
+		
 		if (camX > 2629){
 			camX = 2629;
 		}
@@ -371,35 +549,142 @@ auto main() -> int {
 		}
 		x += xVel;
 		sceCtrlReadBufferPositive(&ctrlData, 1);
-		if (walljump == 0) {
-			if (ctrlData.Buttons & PSP_CTRL_LEFT) {
-				dir = -1;
-				xVel+=3;
+		if (playerDie == false){
+			if (walljump == 0) {
+					if (ctrlData.Buttons & PSP_CTRL_LEFT) {
+						dir = -1;
+						xVel+=3;
+						if (isGrounded == true) {
+							if (particleAmount <= 127){
+								parts[particleAmount].pType = 1;
+								parts[particleAmount].pLife = 8;
+								parts[particleAmount].pYvel = 1;
+								parts[particleAmount].pXvel = (rand() % 5 - 10) * 1;
+								parts[particleAmount].pX = x;
+								parts[particleAmount].pY = y - 4;
+								parts[particleAmount].vis = 1;
+								particleAmount++;
+							}
+						}
+					}
+					if (ctrlData.Buttons & PSP_CTRL_RIGHT) {
+						dir = 1;
+						xVel-=3;
+						if (isGrounded == true) {
+							if (particleAmount <= 127){
+								parts[particleAmount].pType = 1;
+								parts[particleAmount].pLife = 8;
+								parts[particleAmount].pYvel = 1;
+								parts[particleAmount].pXvel = (rand() % 2 - 4) * -1;
+								parts[particleAmount].pX = x;
+								parts[particleAmount].pY = y - 4;
+								parts[particleAmount].vis = 1;
+								particleAmount++;
+							}
+						}
+					}
 			}
-			if (ctrlData.Buttons & PSP_CTRL_RIGHT) {
-				dir = 1;
-				xVel-=3;
-			}
+				if (ctrlData.Buttons & PSP_CTRL_UP) {
+					//y+=5;
+				}
+				if (ctrlData.Buttons & PSP_CTRL_DOWN) {
+					y-=5;
+				}
 		}
-			if (ctrlData.Buttons & PSP_CTRL_UP) {
-				//y+=5;
+			//particles
+			if (particleAmount >= 1) {
+				for (int i = 0; i < 128; i++) {
+					if (parts[i].vis == 1) {
+						parts[i].pX += parts[i].pXvel;
+						parts[i].pY += parts[i].pYvel;
+						if(parts[i].pType == 1){
+							g2dBeginRects(particleData); 
+							g2dSetCoordMode(G2D_CENTER);
+							g2dSetScaleWH(12,12); 
+							g2dSetCoordXY((camX-parts[i].pX),(camY-parts[i].pY)); 
+							g2dSetCropWH(24,24); 
+							g2dSetCropXY(0,0); 
+							g2dAdd(); 
+							g2dEnd(); 
+						}
+						
+						if(parts[i].pType == 2){
+							g2dBeginRects(particleData); 
+							g2dSetCoordMode(G2D_CENTER);
+							g2dSetScaleWH(12,12); 
+							g2dSetCoordXY((camX-parts[i].pX),(camY-parts[i].pY)); 
+							g2dSetCropWH(24,24); 
+							g2dSetCropXY(24,0); 
+							g2dAdd(); 
+							g2dEnd(); 
+							
+							parts[i].pYvel += -0.5;
+						}
+						
+						// player stuff
+						if(parts[i].pType == 3){
+							g2dBeginRects(particleData); 
+							g2dSetCoordMode(G2D_CENTER);
+							g2dSetScaleWH(12,12); 
+							g2dSetCoordXY((camX-parts[i].pX),(camY-parts[i].pY)); 
+							g2dSetCropWH(24,24); 
+							g2dSetCropXY(72,0); 
+							g2dAdd(); 
+							g2dEnd(); 
+							
+							parts[i].pYvel += -0.5;
+						}
+						if(parts[i].pType == 4){
+							g2dBeginRects(particleData); 
+							g2dSetCoordMode(G2D_CENTER);
+							g2dSetScaleWH(12,12); 
+							g2dSetCoordXY((camX-parts[i].pX),(camY-parts[i].pY)); 
+							g2dSetCropWH(24,24); 
+							g2dSetCropXY(48,0); 
+							g2dAdd(); 
+							g2dEnd(); 
+							
+							parts[i].pYvel += -0.5;
+						}
+						if(parts[i].pType == 5){
+							g2dBeginRects(particleData); 
+							g2dSetCoordMode(G2D_CENTER);
+							g2dSetScaleWH(12,12); 
+							g2dSetCoordXY((camX-parts[i].pX),(camY-parts[i].pY)); 
+							g2dSetCropWH(24,24); 
+							g2dSetCropXY(96,0); 
+							g2dAdd(); 
+							g2dEnd(); 
+							
+							parts[i].pYvel += -0.5;
+						}
+						
+						parts[i].pTick +=1;
+						if (parts[i].pTick >= parts[i].pLife){
+							particleAmount-=1;
+							parts[i].pTick = 0;
+							parts[i].vis = 0;
+						}
+					}
+				}
 			}
-			if (ctrlData.Buttons & PSP_CTRL_DOWN) {
-				y-=5;
-			}
-			
-			g2dBeginRects(appel); 
-			g2dSetCoordMode(G2D_CENTER);
-			g2dSetRotation(wall);
-			g2dSetScaleWH(24 * dir,32); 
-			g2dSetCoordXY((camX-x),(camY-y + 0)); 
-			g2dSetCropWH(48,64); 
-			g2dSetCropXY(0,0); 
-			g2dAdd(); 
-			g2dEnd(); 
+			// player
+			if (playerDie == false){
+				g2dBeginRects(appel); 
+				g2dSetCoordMode(G2D_CENTER);
+				g2dSetRotation(wall);
+				g2dSetScaleWH(24 * dir,32); 
+				g2dSetCoordXY((camX-x),(camY-y + 0)); 
+				g2dSetCropWH(48,64); 
+				g2dSetCropXY(0,0); 
+				g2dAdd(); 
+				g2dEnd();
+			}			
 			
 			camX += (x - camX)/ 10 + 24;
 			camY += (y - camY)/ 20 - (gravity / 4) + 5;
+			//camX = x + 219;
+			//camY = y + 121;
 			if (walljump == 0) {
 				wall += wall * -0.1;
 			}else{
@@ -414,37 +699,135 @@ auto main() -> int {
 			
 			tick++;
 			
+			jumpTick +=1;
+			if (jumpTick >= 15){
+				jumpTick = 15;
+			}else{
+				if (playerDie == false){
+					if (ctrlData.Buttons & PSP_CTRL_CROSS) {
+						gravity=-15;
+					}
+				}
+			}
+			
+			if (tick >= 120) {
+				if (playerDie == true) {
+					channelSn2 = pgeWavLoad("assets/audio/Start.wav");
+					pgeWavPlay(channelSn2);
+					playerDie = false;
+					x = 2629;
+					y = -80;
+				}
+			}
+			
+			if (particleAmount > 126) {
+				particleAmount = 0;
+			}
+			
 			// level collisions
+			isGrounded = false;
 			for (int i = 0; i < cloneCountX * cloneCountY; i++) {
 				// collisionn
 				if(lvlData[lvl[i].index] > 2){
 					if(collision((camX-x),(camY-y),(camX-lvl[i].tX)+219,(camY-lvl[i].tY+121),24,32,32,32,false,lvlData[lvl[i].index])){
 						if(lvl[i].en == 1){
-							if(lvl[i].type == 2){
-								if (gravity >= 7){
-									channelSn2 = pgeWavLoad("assets/audio/enemy_defeat.wav");
+							if(lvl[i].type == 3){
+								if (playerDie == false) {
+									channelSn2 = pgeWavLoad("assets/audio/boom.wav");
 									pgeWavPlay(channelSn2);
-									lvl[i].defeated = 1;
-									lvl[i].en = 0;
-									gravity=-35;
+									tick = 0;
+									playerDie = true;
+									for (int i2 = 0; i2 < 2; i2++) {
+										if (particleAmount <= 127){
+											parts[particleAmount].pType = 4;
+											parts[particleAmount].pLife = 128;
+											parts[particleAmount].pYvel = 5+ (rand() % 7 );
+											parts[particleAmount].pXvel = -4+ (rand() % 8 );
+											parts[particleAmount].pX = x;
+											parts[particleAmount].pY = y;
+											parts[particleAmount].vis = 1;
+											particleAmount++;
+										}
+									}
+									for (int i2 = 0; i2 < 5; i2++) {
+										if (particleAmount <= 127){
+											parts[particleAmount].pType = 3;
+											parts[particleAmount].pLife = 128;
+											parts[particleAmount].pYvel = 5+ (rand() % 7 );
+											parts[particleAmount].pXvel = -4+ (rand() % 8 );
+											parts[particleAmount].pX = x;
+											parts[particleAmount].pY = y;
+											parts[particleAmount].vis = 1;
+											particleAmount++;
+										}
+									}
+								}
+							}
+							if(lvl[i].type == 2){
+								if (gravity >= 3){
+									if(lvl[i].type == 2){
+										lvl[i].tTick = 0;
+										lvl[i].dX = x;
+										lvl[i].dY = y;
+										channelSn2 = pgeWavLoad("assets/audio/enemy_defeat.wav");
+										pgeWavPlay(channelSn2);
+										lvl[i].defeated = 1;
+										
+										gravity=-20;
+										jumpTick=0;
+									}
 								}else{
-									x = 2629;
-									y = -80;
+									if (playerDie == false) {
+										channelSn2 = pgeWavLoad("assets/audio/boom.wav");
+										pgeWavPlay(channelSn2);
+										tick = 0;
+										playerDie = true;
+										for (int i2 = 0; i2 < 2; i2++) {
+											if (particleAmount <= 127){
+												parts[particleAmount].pType = 4;
+												parts[particleAmount].pLife = 128;
+												parts[particleAmount].pYvel = 5+ (rand() % 7 );
+												parts[particleAmount].pXvel = -4+ (rand() % 8 );
+												parts[particleAmount].pX = x;
+												parts[particleAmount].pY = y;
+												parts[particleAmount].vis = 1;
+												particleAmount++;
+											}
+										}
+										for (int i2 = 0; i2 < 5; i2++) {
+											if (particleAmount <= 127){
+												parts[particleAmount].pType = 3;
+												parts[particleAmount].pLife = 128;
+												parts[particleAmount].pYvel = 5+ (rand() % 7 );
+												parts[particleAmount].pXvel = -4+ (rand() % 8 );
+												parts[particleAmount].pX = x;
+												parts[particleAmount].pY = y;
+												parts[particleAmount].vis = 1;
+												particleAmount++;
+											}
+										}
+									}
 								}
 							}
 							if(lvl[i].type == 1){
-								lvl[i].en = 0;
-								pgeWavPlay(appleSn);
-								pgeWavPlay(apple2Sn);
+								if(lvl[i].type == 1){
+									
+									lvl[i].en = 0;
+									lvlData[lvl[i].index] = 2;
+									pgeWavPlay(appleSn);
+									pgeWavPlay(apple2Sn);
+								}
 							}
 							if(lvl[i].type == 0){
+								isGrounded = true;
 									if(gravity < -1){
 										gravity = 1;
 									}else{
 										gravity = 1;
 										// controls part 2 :D
 										if (ctrlData.Buttons & PSP_CTRL_CROSS) {
-											gravity=-25;
+											jumpTick = 0;
+											gravity=-10;
 											y-=gravity;
 											channelSn = pgeWavLoad("assets/audio/jump.wav");
 											pgeWavPlay(channelSn);
@@ -456,14 +839,16 @@ auto main() -> int {
 									if(collision((camX-x),(camY-y),(camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121,24,32,32,32,false,lvl[i].index)){
 										x=nX;
 										wall = 90 * dir;
-										if (ctrlData.Buttons & PSP_CTRL_CROSS) {
-											channelSn = pgeWavLoad("assets/audio/wall-jump.wav");
-											pgeWavPlay(channelSn);
-											gravity=-25;
-											dir = dir * -1;
-											xVel = (dir) * -5;
-											walljump = 1;
-											y-=gravity;
+										if (playerDie == false){
+											if (ctrlData.Buttons & PSP_CTRL_CROSS) {
+												channelSn = pgeWavLoad("assets/audio/wall-jump.wav");
+												pgeWavPlay(channelSn);
+												gravity=-25;
+												dir = dir * -1;
+												xVel = (dir) * -5;
+												walljump = 1;
+												y-=gravity;
+											}
 										}
 									}
 							}
@@ -471,11 +856,17 @@ auto main() -> int {
 					}
 				}
 			}
+			
+			if (ctrlData.Buttons & PSP_CTRL_SELECT) {
+				running = 0;
+			}
+			
 			nX = x;
 			nY = y;
 			g2dFlip(G2D_VSYNC);
 	}
-		
+	// wrap up code
+	pgeWavStopAll();
 	sceKernelExitGame();
 	return 0;
 	

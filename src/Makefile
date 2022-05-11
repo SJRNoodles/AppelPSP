@@ -10,7 +10,7 @@ ASFLAGS = $(CFLAGS)
 BUILD_PRX = 1
 PSP_FW_VERSION = 500
 PSP_LARGE_MEMORY = 1
-LIBS = -lpng -ljpeg -lz -lpspgu -lm -lpspvram -lpspaudiolib -lpspaudio
+LIBS = -lpng -ljpeg -lz -lpspgu -lm -lpspvram -lpspaudiolib -lpspaudio -lpsppower
 
 EXTRA_TARGETS = EBOOT.PBP
 PSP_EBOOT_TITLE = Appel
