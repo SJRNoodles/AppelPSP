@@ -2,7 +2,7 @@ TARGET = Appel
 OBJS = main.o glib2d.o pgeWav.o
 
 
-CFLAGS = 
+CFLAGS = -O3
 CXXFLAHS = $(CFLAGS) -std=c++14 -fno-rtti
 ASFLAGS = $(CFLAGS)
 

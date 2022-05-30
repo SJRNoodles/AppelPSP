@@ -4,6 +4,7 @@
 #include <pspdisplay.h>
 #include <img.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <time.h>
 #include <math.h>
 #include <unistd.h>
@@ -22,7 +23,7 @@
 
 
 
-//APPEL FOR PSP BY NOODLES 2022
+//APPEL PSP -
 PSP_MODULE_INFO("Appel", 0, 1, 0);
 PSP_HEAP_SIZE_KB(-256);
 
@@ -202,6 +203,12 @@ int getTileX(int in){
 	if(in == 17){
 		return(tilePos(4));
 	}
+	if(in == 20){
+		return(tilePos(2));
+	}
+	if(in == 21){
+		return(tilePos(2));
+	}
 }
 
 int getTileY(int in){
@@ -254,6 +261,12 @@ int getTileY(int in){
 	if(in == 17){
 		return(tilePos(0));
 	}
+	if(in == 20){
+		return(tilePos(2));
+	}
+	if(in == 21){
+		return(tilePos(2));
+	}
 }
 
 int getType(int in){
@@ -305,8 +318,17 @@ int getType(int in){
 	if(in == 17){
 		return(4);
 	}
+	if(in == 18){
+		return(6);
+	}
 	if(in == 19){
 		return(5);
+	}
+	if(in == 20){
+		return(3);
+	}
+	if(in == 21){
+		return(3);
 	}
 }
 
@@ -488,6 +510,9 @@ auto main() -> int {
 					xVel = 0;
 					camX = x;
 					camY = y;
+					//spawnX = (levelCountX * 31)-64;
+					spawnX = 16260;
+					spawnY = 280;
 					x = spawnX;
 					y = spawnY;
 					state=1;
@@ -881,6 +906,18 @@ auto main() -> int {
 								lvl[i].tY = (lvl[i].otY + sin(lvl[i].tTick / (16 / multiplyer))*32);
 							}
 						}
+						if (lvl[i].type == 6){
+							g2dSetCoordXY((camX-lvl[i].tX)+219,(camY-lvl[i].tY)+121); 
+							g2dSetCropXY(160,0); 
+							g2dSetCropWH(32,47);
+							g2dSetScaleWH(32,47);
+						}
+						if (lvlData[lvl[i].index] == 20){
+							g2dSetRotation(90);
+						}
+						if (lvlData[lvl[i].index] == 21){
+							g2dSetRotation(-90);
+						}
 						g2dAdd();
 						g2dEnd(); 
 					}
@@ -1037,6 +1074,19 @@ auto main() -> int {
 								g2dEnd(); 
 								
 								parts[i].pYvel += -0.5 * multiplyer;
+							}
+							if(parts[i].pType == 6){
+								g2dBeginRects(levelRes); 
+								g2dSetCoordMode(G2D_CENTER);
+								g2dSetScaleWH(16,24); 
+								g2dSetCoordXY((camX-parts[i].pX),(camY-parts[i].pY)); 
+								g2dSetCropWH(32,47); 
+								g2dSetCropXY(160,0); 
+								g2dAdd(); 
+								g2dEnd(); 
+								
+								parts[i].pYvel += -0.5 * multiplyer;
+				
 							}
 							
 							parts[i].pTick +=1;
@@ -1422,6 +1472,27 @@ auto main() -> int {
 										}
 									}
 								}
+								if(lvl[i].type == 6){ // checkpoint
+									if (lvl[i].defeated == 0) {
+										channelSn2 = pgeWavLoad("assets/audio/Flag.wav");
+										pgeWavPlay(channelSn2);
+										lvl[i].defeated = 1;
+										spawnX = x;
+										spawnY = y + 64;
+										for (int i2 = 0; i2 < 8; i2++) {
+											if (particleAmount <= 127){
+												parts[particleAmount].pType = 6;
+												parts[particleAmount].pLife = 32;
+												parts[particleAmount].pYvel = 5+ (rand() % 7 );
+												parts[particleAmount].pXvel = -4+ (rand() % 8 );
+												parts[particleAmount].pX = x;
+												parts[particleAmount].pY = y;
+												parts[particleAmount].vis = 1;
+												particleAmount++;
+											}
+										}
+									}
+								}
 								if(lvl[i].type == 1){
 									if(lvl[i].type == 1){
 										
@@ -1495,6 +1566,7 @@ auto main() -> int {
 				nY = y;
 		}
 			g2dFlip(G2D_VSYNC);
+			//sceKernelDelayThread(30 * 1000);
 	}
 	// wrap up code
 	pgeWavStopAll();
