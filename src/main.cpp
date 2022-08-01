@@ -86,6 +86,8 @@ int nY = y;
 int camX = x;
 int camY = y;
 
+int selectedLevel = 1;
+
 // modifiers
 int threadDelay = false;
 double walkSpeed = 2.7;
@@ -406,6 +408,7 @@ auto main() -> int {
 	g2dTexture* bg = g2dTexLoad("assets/bg.png",G2D_SWIZZLE);
 	g2dTexture* bg2 = g2dTexLoad("assets/grid.png",G2D_SWIZZLE);
 	g2dTexture* pauseRes = g2dTexLoad("assets/pause_screen.png",G2D_SWIZZLE);
+	g2dTexture* selRes = g2dTexLoad("assets/level_select.png",G2D_SWIZZLE);
 	
 	pgeWav* appleSn = pgeWavLoad("assets/audio/crunch.wav");
 	pgeWav* apple2Sn = pgeWavLoad("assets/audio/coin.wav");
@@ -521,17 +524,7 @@ auto main() -> int {
 			}
 			if (latchData.uiBreak & PSP_CTRL_CROSS){
 				if (titleSelect == 0) {
-					std::copy(levelDat2,levelDat2+20480,lvlData);
-					gravity = 0;
-					xVel = 0;
-					//spawnX = (levelCountX * 31)-64;/
-					spawnX = 16260;
-					spawnY = 280;
-					x = spawnX;
-					y = spawnY;
-					camX = x;
-					camY = y;
-					state=1;
+					state=3;
 				}
 				if (titleSelect == 1) {
 					state=2;
@@ -539,6 +532,85 @@ auto main() -> int {
 			}
 			if (ctrlData.Buttons & PSP_CTRL_SELECT) {
 					running = 0;
+			}
+		}
+		if (state == 3) {
+			// LEVEL SELECT!
+			sceCtrlReadLatch(&latchData);
+			sceCtrlReadBufferPositive(&ctrlData, 1);
+			camX++;
+			if (camX > 511) {
+				camX=0;
+			}
+			
+			if (latchData.uiBreak & PSP_CTRL_LEFT){
+				selectedLevel-=1;
+				if (selectedLevel <1) {
+					selectedLevel=1;
+				}
+			}
+			
+			if (latchData.uiBreak & PSP_CTRL_RIGHT){
+				selectedLevel+=1;
+				if (selectedLevel >2) {
+					selectedLevel=2;
+				}
+			}
+			
+			// white bar
+			g2dBeginRects(selRes);
+			g2dSetCoordMode(G2D_CENTER);
+			g2dSetColor(WHITE);
+			g2dSetScaleWH(480,136);
+			g2dSetCoordXY(240,136);
+			g2dSetCropWH(75,33); 
+			g2dSetCropXY(166,0); 
+			g2dAdd();
+			g2dEnd();
+			
+			// level text
+			g2dBeginRects(selRes);
+			g2dSetCoordMode(G2D_CENTER);
+			g2dSetColor(WHITE);
+			g2dSetScaleWH(166,57);
+			g2dSetCoordXY(240,119);
+			g2dSetCropWH(166,57); 
+			g2dSetCropXY(0,1 * (selectedLevel*57)-57); 
+			g2dAdd();
+			g2dEnd();
+			
+			// play button
+			g2dBeginRects(guiRes); 
+			g2dSetCoordMode(G2D_CENTER);
+			g2dSetScaleWH(128,35); 
+			g2dSetCoordXY(240,173);
+			g2dSetCropWH(256,69); 
+			g2dSetCropXY(0,0); 
+			g2dAdd(); 
+			g2dEnd(); 
+			
+			if (latchData.uiBreak & PSP_CTRL_CROSS){
+				if (selectedLevel == 1) {
+					std::copy(levelDat1,levelDat1+20480,lvlData);
+				}
+				if (selectedLevel == 2) {
+					std::copy(levelDat2,levelDat2+20480,lvlData);
+				}
+				pgeWavUnload(channelSn);
+				pgeWavUnload(channelSn2);
+				gravity = 0;
+				xVel = 0;
+				//spawnX = (levelCountX * 31)-64;/
+				spawnX = 16260;
+				spawnY = 280;
+				x = spawnX;
+				y = spawnY;
+				camX = x;
+				camY = y;
+				state=1;
+			}
+			if (latchData.uiBreak & PSP_CTRL_CIRCLE){
+				state = 0;
 			}
 		}
 		if (state == 2) {
@@ -715,7 +787,7 @@ auto main() -> int {
 							if (lvl[i].defeated == 0) {
 								if (pauseGame == -1) {
 									lvl[i].tTick += 12 * multiplyer;
-									if(collision((camX-x),(camY-y),(camX-lvl[i].tX)-(128*lvl[i].enemy_dir)+219,(camY-lvl[i].tY)+121-32,24,32,256,128,false,lvl[i].index)){
+									if(collision((camX-x),(camY-y),(camX-lvl[i].tX)-(128*lvl[i].enemy_dir)-64+219,(camY-lvl[i].tY)+121-32,24,32,256,128,false,lvl[i].index)){
 										lvl[i].tTick += 6 * multiplyer;
 										lvl[i].tX += 1 * lvl[i].enemy_dir;
 									}
@@ -724,8 +796,17 @@ auto main() -> int {
 									lvl[i].tTick = 0;
 									channelSn2 = pgeWavLoad("assets/audio/blip2.wav");
 									pgeWavPlay(channelSn2);
-									if(!collision((camX-x),(camY-y),(camX-lvl[i].tX)-(128*lvl[i].enemy_dir)+219,(camY-lvl[i].tY)+121-32,24,32,256,128,false,lvl[i].index)){
-										lvl[i].enemy_dir = lvl[i].enemy_dir * -1;
+									//if(!collision((camX-x),(camY-y),(camX-lvl[i].tX)-(128*lvl[i].enemy_dir)-64+219,(camY-lvl[i].tY)+121-32,24,32,256,128,false,lvl[i].index)){
+									//	lvl[i].enemy_dir = lvl[i].enemy_dir * -1;
+									//}
+									for (int i2 = 0; i2 < cloneCountX * cloneCountY; i2++) {
+										if(lvlData[lvl[i2].index] > 2 ){
+											if(lvl[i2].type == 9 ){
+												if(collision((camX-lvl[i2].tX)+219,(camY-lvl[i2].tY+121),(camX-lvl[i].tX)+219,(camY-lvl[i].tY+121),32,32,32,32,false,lvlData[lvl[i2].index])){
+													lvl[i].enemy_dir = lvl[i].enemy_dir * -1;
+												}
+											}
+										}
 									}
 								}
 								if (pauseGame == -1) {
@@ -1408,7 +1489,7 @@ auto main() -> int {
 							}
 						}
 						if(lvl[i].type == 5){
-							if(collision((camX-x),(camY-y),(camX-lvl[i].tX)+219,(camY-lvl[i].tY+121),24,32,128,32,true,lvlData[lvl[i].index])){
+							if(collision((camX-x),(camY-y),(camX-lvl[i].tX)+219,(camY-lvl[i].tY+121),24,32,64,32,false,lvlData[lvl[i].index])){
 								nY = lvl[i].tY - 96;
 								nY += 8;
 								isGrounded = true;
